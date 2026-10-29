@@ -53,6 +53,12 @@ class ReadmeTest(unittest.TestCase):
         self.assertIn("|---|---|---|---|\n| `betelio:betelio:1.0` | P | L | S |\n| `net.sf.jpf:jpf:1.5.1` | P | L | S |\n"
                       "<!-- /artifacts -->\n\n## Not Hosted\n", readme)
 
+    def test_classifier_row_follows_its_artifact(self):
+        readme = README
+        for text in (JPF + ":sources", JPF):
+            readme = tool.add_readme_row(readme, tool.readme_row(tool.Coordinates.parse(text), "P", "L", "S"))
+        self.assertIn(f"| `{JPF}` | P | L | S |\n| `{JPF}:sources` | P | L | S |\n", readme)
+
     def test_duplicate_row_refused(self):
         row = tool.readme_row(tool.Coordinates.parse(JPF), "P", "L", "S")
         with self.assertRaises(tool.Problem):
@@ -153,6 +159,53 @@ class ImportTest(unittest.TestCase):
             self.assertIn(element, pom)
         self.assertIn("| LogicalDOC CE 9.3.2 release bundle |", (self.root / "README.md").read_text(encoding="utf-8"))
 
+    def test_file_import_of_classifier_jar_keeps_hosted_pom(self):
+        jpf = tool.Coordinates.parse(JPF)
+        self.publish(jpf.jar, b"jar bytes")
+        self.publish(jpf.pom, b"<project/>")
+        self.assertEqual(0, self.import_jpf()[0])
+        sources_jar = self.base / "jpf-1.5.1-sources.jar"
+        sources_jar.write_bytes(b"source bytes")
+        status, _, err = self.run_tool(JPF + ":sources", "--file", str(sources_jar), "--source", "JPF's source zip",
+                                       "--project", "JPF", "--licence", "LGPL-2.1-or-later")
+        self.assertEqual((0, ""), (status, err))
+        sources = tool.Coordinates.parse(JPF + ":sources")
+        self.assertEqual(b"source bytes", (self.root / sources.jar).read_bytes())
+        self.assertEqual(hashlib.sha1(b"source bytes").hexdigest() + "\n",
+                         (self.root / jpf.directory / "jpf-1.5.1-sources.jar.sha1").read_text(encoding="ascii"))
+        self.assertEqual(b"<project/>", (self.root / jpf.pom).read_bytes())
+        self.assertIn(f"| `{JPF}:sources` | JPF | LGPL-2.1-or-later | JPF's source zip |",
+                      (self.root / "README.md").read_text(encoding="utf-8"))
+        self.assertEqual([], tool.verify(self.root))
+
+    def test_file_import_of_classifier_jar_without_pom_writes_stub(self):
+        jar = self.base / "assembly.jar"
+        jar.write_bytes(b"assembly")
+        status, _, err = self.run_tool(KSOAP, "--file", str(jar), "--source", "a bundle", "--project", "ksoap2",
+                                       "--licence", "MIT")
+        self.assertEqual((0, ""), (status, err))
+        pom = (self.root / tool.Coordinates.parse(KSOAP).pom).read_text(encoding="utf-8")
+        self.assertIn("<artifactId>ksoap2-android-assembly</artifactId>", pom)
+
+    def test_logicaldoc_group_refused(self):
+        jar = self.base / "core.jar"
+        jar.write_bytes(b"core")
+        for text in ("com.logicaldoc:logicaldoc-core:9.3.1", "com.logicaldoc.plugins:extra:1.0"):
+            with self.subTest(text):
+                status, _, err = self.run_tool(text, "--file", str(jar), "--source", "a bundle", "--project", "P",
+                                               "--licence", "LGPL-3.0-only")
+                self.assertEqual(1, status)
+                self.assertIn("Healdan module", err)
+                self.assertFalse((self.root / "com").exists())
+                self.assertEqual(README, (self.root / "README.md").read_text(encoding="utf-8"))
+
+    def test_group_merely_starting_with_logicaldoc_allowed(self):
+        jar = self.base / "other.jar"
+        jar.write_bytes(b"other")
+        status, _, err = self.run_tool("com.logicaldocs:other:1.0", "--file", str(jar), "--source", "a bundle",
+                                       "--project", "P", "--licence", "MIT")
+        self.assertEqual((0, ""), (status, err))
+
     def test_classifier_import(self):
         ksoap = tool.Coordinates.parse(KSOAP)
         self.publish(ksoap.jar, b"assembly")
@@ -201,6 +254,23 @@ class WriteArtifactTest(unittest.TestCase):
         self.assertIn("different content", str(caught.exception))
         self.assertEqual(b"<hosted/>", pom.read_bytes())
         self.assertFalse((self.root / self.jpf.jar).exists())
+
+    def test_no_pom_keeps_the_hosted_one(self):
+        pom = self.root / self.jpf.pom
+        pom.parent.mkdir(parents=True)
+        pom.write_bytes(b"<hosted/>")
+        sources = tool.Coordinates.parse(JPF + ":sources")
+        tool.write_artifact(self.root, sources, b"source bytes", None)
+        self.assertEqual(b"source bytes", (self.root / sources.jar).read_bytes())
+        self.assertEqual(b"<hosted/>", pom.read_bytes())
+        self.assertFalse((self.root / self.jpf.directory / "jpf-1.5.1.pom.sha1").exists())
+
+    def test_no_pom_and_none_hosted_refused(self):
+        sources = tool.Coordinates.parse(JPF + ":sources")
+        with self.assertRaises(tool.Problem) as caught:
+            tool.write_artifact(self.root, sources, b"source bytes", None)
+        self.assertIn("no POM", str(caught.exception))
+        self.assertFalse((self.root / sources.jar).exists())
 
     def test_existing_pom_with_same_content_completes_the_import(self):
         pom = self.root / self.jpf.pom
@@ -312,6 +382,15 @@ class VerifyTest(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.assertEqual(1, tool.main(["--verify"], root=self.root))
         self.assertIn("doesn't match its .sha1", out.getvalue())
+
+    def test_hosted_logicaldoc_artifact_reported(self):
+        core = tool.Coordinates.parse("com.logicaldoc:logicaldoc-core:9.3.1")
+        tool.write_artifact(self.root, core, b"core", tool.stub_pom(core))
+        readme = (self.root / "README.md").read_text(encoding="utf-8")
+        (self.root / "README.md").write_text(tool.add_readme_row(readme, tool.readme_row(core, "P", "L", "S")),
+                                             encoding="utf-8")
+        self.assertEqual([f"{core.jar}: com.logicaldoc artifacts are Healdan's own modules, never hosted"],
+                         tool.verify(self.root))
 
     def test_stray_jar_reported(self):
         (self.root / "stray.jar").write_bytes(b"stray")

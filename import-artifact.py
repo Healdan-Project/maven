@@ -8,7 +8,9 @@
 #       Fetches the jar and POM from LogicalDOC's repository (or URL), checks each against the .sha1 published
 #       beside it, writes them with their .sha1s, and adds the artifact's row to README.md.
 #   import-artifact.py GROUP:ARTIFACT:VERSION[:CLASSIFIER] --file JAR --source TEXT --project TEXT --licence SPDX
-#       Imports a jar taken from elsewhere, such as a LogicalDOC CE release bundle, with a stub POM.
+#       Imports a jar taken from elsewhere, such as a LogicalDOC CE release bundle, with a stub POM. A classifier
+#       jar, such as a -sources.jar, keeps its artifact's hosted POM instead.
+#   Neither imports group com.logicaldoc: those are Healdan's own modules.
 #   import-artifact.py --scan LOCAL_REPO [--repository-id ID]
 #       Lists the artifacts a local Maven repository records as downloaded from repository ID (logicaldoc).
 #   import-artifact.py --verify [URL]
@@ -61,6 +63,12 @@ class Coordinates:
 
     def __str__(self):
         return ":".join(part for part in (self.group, self.artifact, self.version, self.classifier) if part)
+
+    @property
+    def is_healdans(self):
+        """Healdan's own modules keep LogicalDOC's group. Healdan builds them, so one is never hosted: a build
+        that can't find one has a Healdan module left behind on an old version."""
+        return self.group == "com.logicaldoc" or self.group.startswith("com.logicaldoc.")
 
     @property
     def directory(self):
@@ -116,16 +124,20 @@ def stub_pom(coordinates):
 
 
 def write_artifact(root, coordinates, jar, pom):
-    """Writes the jar and POM with their .sha1s. Never changes a hosted file."""
+    """Writes the jar and POM with their .sha1s, or with pom None the jar beside its hosted POM. Never changes a
+    hosted file."""
     jar_path, pom_path = root / coordinates.jar, root / coordinates.pom
     if jar_path.exists():
         raise Problem(f"{coordinates.jar} is already hosted, and a hosted version never changes")
-    if pom_path.exists() and pom_path.read_bytes() != pom:
+    if pom is None and not pom_path.is_file():
+        raise Problem(f"{coordinates.pom} isn't hosted, and no POM was given")
+    if pom is not None and pom_path.exists() and pom_path.read_bytes() != pom:
         raise Problem(f"{coordinates.pom} is already hosted with different content")
     jar_path.parent.mkdir(parents=True, exist_ok=True)
     for path, data in ((jar_path, jar), (pom_path, pom)):
-        path.write_bytes(data)
-        path.with_name(path.name + ".sha1").write_text(sha1(data) + "\n", encoding="ascii")
+        if data is not None:
+            path.write_bytes(data)
+            path.with_name(path.name + ".sha1").write_text(sha1(data) + "\n", encoding="ascii")
 
 
 def readme_row(coordinates, project, licence, source):
@@ -133,7 +145,8 @@ def readme_row(coordinates, project, licence, source):
 
 
 def _row_key(row):
-    return row.split("|")[1].strip()
+    # Without the backticks, so a classifier's row follows its artifact's
+    return row.split("|")[1].strip().strip("`")
 
 
 def add_readme_row(readme, row):
@@ -207,9 +220,13 @@ def verify(root, url=None):
                 problems.append(f"{name}: {problem}")
         if relative.suffix == ".jar":
             try:
-                hosted.add(str(Coordinates.from_jar_path(relative.parts)))
+                coordinates = Coordinates.from_jar_path(relative.parts)
             except ValueError:
                 problems.append(f"{name}: isn't in Maven's layout")
+            else:
+                hosted.add(str(coordinates))
+                if coordinates.is_healdans:
+                    problems.append(f"{name}: com.logicaldoc artifacts are Healdan's own modules, never hosted")
     # Only the artifact table: Not Hosted's rows also start with a coordinate in backticks
     readme = (root / "README.md").read_text(encoding="utf-8")
     table = readme[readme.find(TABLE_START):readme.find(TABLE_END)]
@@ -249,8 +266,13 @@ def main(argv, root=ROOT, today=None):
         parser.error("--file needs --source, saying where the jar came from")
     try:
         coordinates = Coordinates.parse(args.coordinates)
+        if coordinates.is_healdans:
+            raise Problem(f"{coordinates} is a Healdan module, which Healdan builds: bump the module that's behind "
+                          f"to the root POM's version instead of hosting it")
         if args.file:
-            jar, pom, source = args.file.read_bytes(), stub_pom(coordinates), args.source
+            # A classifier jar, such as a -sources.jar, sits beside its artifact's hosted POM
+            keep_pom = coordinates.classifier and (root / coordinates.pom).is_file()
+            jar, pom, source = args.file.read_bytes(), None if keep_pom else stub_pom(coordinates), args.source
         else:
             base = args.base if args.base.endswith("/") else args.base + "/"
             jar, pom = fetch_verified(base, coordinates.jar), fetch_verified(base, coordinates.pom)
