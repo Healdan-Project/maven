@@ -173,5 +173,47 @@ class ImportTest(unittest.TestCase):
                 tool.main(list(argv), root=self.root, today="2026-10-29")
 
 
+class WriteArtifactTest(unittest.TestCase):
+    """write_artifact's guards, tested directly: a hosted file is never replaced, even when README.md has no row for it."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = pathlib.Path(tmp.name)
+        self.jpf = tool.Coordinates.parse(JPF)
+
+    def test_existing_jar_refused_and_left_alone(self):
+        jar = self.root / self.jpf.jar
+        jar.parent.mkdir(parents=True)
+        jar.write_bytes(b"hosted bytes")
+        with self.assertRaises(tool.Problem) as caught:
+            tool.write_artifact(self.root, self.jpf, b"new bytes", b"<project/>")
+        self.assertIn("already hosted", str(caught.exception))
+        self.assertEqual(b"hosted bytes", jar.read_bytes())
+        self.assertFalse((self.root / self.jpf.pom).exists())
+
+    def test_existing_pom_with_different_content_refused_and_left_alone(self):
+        pom = self.root / self.jpf.pom
+        pom.parent.mkdir(parents=True)
+        pom.write_bytes(b"<hosted/>")
+        with self.assertRaises(tool.Problem) as caught:
+            tool.write_artifact(self.root, self.jpf, b"jar bytes", b"<new/>")
+        self.assertIn("different content", str(caught.exception))
+        self.assertEqual(b"<hosted/>", pom.read_bytes())
+        self.assertFalse((self.root / self.jpf.jar).exists())
+
+    def test_existing_pom_with_same_content_completes_the_import(self):
+        pom = self.root / self.jpf.pom
+        pom.parent.mkdir(parents=True)
+        pom.write_bytes(b"<project/>")
+        tool.write_artifact(self.root, self.jpf, b"jar bytes", b"<project/>")
+        self.assertEqual(b"jar bytes", (self.root / self.jpf.jar).read_bytes())
+        self.assertEqual(b"<project/>", pom.read_bytes())
+        self.assertEqual(hashlib.sha1(b"jar bytes").hexdigest() + "\n",
+                         (self.root / self.jpf.directory / "jpf-1.5.1.jar.sha1").read_text(encoding="ascii"))
+        self.assertEqual(hashlib.sha1(b"<project/>").hexdigest() + "\n",
+                         (self.root / self.jpf.directory / "jpf-1.5.1.pom.sha1").read_text(encoding="ascii"))
+
+
 if __name__ == "__main__":
     unittest.main()
