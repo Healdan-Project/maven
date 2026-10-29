@@ -32,6 +32,21 @@ Push, and once `python3 import-artifact.py --verify https://maven.healdan.com/` 
 <!-- artifacts -->
 | Coordinates | Project | Licence | Source |
 |---|---|---|---|
+| `com.allen_sauer.gwt.dnd:gwt-dnd:3.0.1` | [gwt-dnd](https://github.com/fredsa/gwt-dnd) | Apache-2.0 | logicaldoc.sourceforge.net, 2026-10-29 |
+| `com.google.gwt:gwt-incubator:2.1.0` | [GWT Incubator](https://code.google.com/archive/p/google-web-toolkit-incubator/) | Apache-2.0, bundling JavaSWF (BSD-3-Clause) and W3C's CSS parser (W3C notice) | logicaldoc.sourceforge.net, 2026-10-29 |
+| `com.orange.links:gwt-links:1.4.2` | [gwt-links](https://code.google.com/archive/p/gwt-links/) | Apache-2.0 | logicaldoc.sourceforge.net, 2026-10-29 |
+| `com.smartgwt:smartgwt-skins:14.1p` | [Smart GWT LGPL Edition](https://smartclient.com/product/) | LGPL-3.0-only | logicaldoc.sourceforge.net, 2026-10-29 |
+| `com.smartgwt:smartgwt:14.1p` | [Smart GWT LGPL Edition](https://smartclient.com/product/) | LGPL-3.0-only | logicaldoc.sourceforge.net, 2026-10-29 |
+| `com.timgroup:jgravatar:1.2.ld` | [jgravatar](https://github.com/tim-group/jgravatar) | BSD-3-Clause OR LGPL-3.0, bundling Guava (Apache-2.0) | logicaldoc.sourceforge.net, 2026-10-29 |
+| `commons-fileupload:commons-fileupload:1.6.0-jakarta` | [Apache Commons FileUpload](https://commons.apache.org/proper/commons-fileupload/), LogicalDOC's Jakarta build | Apache-2.0 | logicaldoc.sourceforge.net, 2026-10-29 |
+| `gdurelle.tagcloud:tagcloud:0.4` | [gwt-tagcloud](https://github.com/gdurelle/gwt-tagcloud) | Apache-2.0 | logicaldoc.sourceforge.net, 2026-10-29 |
+| `gwtchismes:gwtchismes:0.9.8` | [GWTChismes](https://code.google.com/archive/p/gwtchismes/) | Apache-2.0 | logicaldoc.sourceforge.net, 2026-10-29 |
+| `net.sf.jpf:jpf-boot:1.5.1` | [Java Plug-in Framework](https://jpf.sourceforge.net/) | LGPL-2.1 | logicaldoc.sourceforge.net, 2026-10-29 |
+| `net.sf.jpf:jpf:1.5.1` | [Java Plug-in Framework](https://jpf.sourceforge.net/) | LGPL-2.1 | logicaldoc.sourceforge.net, 2026-10-29 |
+| `org.apache.jackrabbit:jackrabbit-jcr-commons:2.22.0-jakarta` | [Apache Jackrabbit](https://jackrabbit.apache.org/), LogicalDOC's Jakarta build | Apache-2.0 | logicaldoc.sourceforge.net, 2026-10-29 |
+| `org.apache.jackrabbit:jackrabbit-jcr-server:2.22.0-jakarta` | [Apache Jackrabbit](https://jackrabbit.apache.org/), LogicalDOC's Jakarta build | Apache-2.0 | logicaldoc.sourceforge.net, 2026-10-29 |
+| `org.apache.jackrabbit:jackrabbit-webdav:2.22.0-jakarta` | [Apache Jackrabbit](https://jackrabbit.apache.org/), LogicalDOC's Jakarta build | Apache-2.0 | logicaldoc.sourceforge.net, 2026-10-29 |
+| `org.timepedia.exporter:gwtexporter:2.0.10` | [gwt-exporter](https://github.com/manolo/gwt-exporter) | Apache-2.0 | logicaldoc.sourceforge.net, 2026-10-29 |
 <!-- /artifacts -->
 
 ## Licences
@@ -54,3 +69,4 @@ and the NOTICE files of Apache Commons FileUpload and Apache Jackrabbit.
 | `javax.media:jai-core:1.1.3`, `com.sun.media:jai-codec:1.1.3` | Sun Microsystems, Inc. Binary Code License Agreement | Its POM says distribution is `manual`, and Maven Central carries its POM but not its jar. Nothing in Healdan's build references its classes, so Healdan's `logicaldoc-core` drops it. |
 | `betelio:betelio:1.0` | None stated | No licence and no confirmed author. Nothing in Healdan's build uses it, so Healdan drops it. |
 | `com.google.code.ksoap2-android:ksoap2-android-assembly:3.3.0` | MIT, with bundled kObjects code that's partly GPLv2 and partly unlicensed | Its only user was LogicalDOC's SOAP client module, `logicaldoc-webserviceclient`, which Healdan leaves out of its build. |
+| `com.oracle.jdbc:ojdbc8:12.2.0.1` | Oracle's OTN licence, which doesn't allow free redistribution; the jar states none | Healdan supports only open-source databases, so it drops Oracle's driver. |
