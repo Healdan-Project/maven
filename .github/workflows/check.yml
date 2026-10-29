@@ -1,23 +1,60 @@
 name: Check
 
-# Every hosted file matches its .sha1 and README.md's table, and import-artifact.py's tests pass.
+# Every hosted file matches its .sha1 and README.md's table, no hosted file changes, and import-artifact.py's tests
+# pass. Each day, and by hand, what Pages serves matches the hosted files.
 
 on:
   push:
     branches: [ main ]
   pull_request:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   check:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Test import-artifact.py
         run: python3 -m unittest discover -s tests -v
 
       - name: Verify the hosted files
         run: python3 import-artifact.py --verify
+
+      # A hosted version never changes: no jar, POM or .sha1 already hosted is modified, deleted or renamed. A pull
+      # request's merge commit is compared with its first parent, the base branch; a push with the commit it replaced.
+      - name: Check no hosted file changed
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || github.event.before }}
+        run: |
+          if [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
+            echo "No earlier commit to compare with"
+            exit 0
+          fi
+          if ! git merge-base --is-ancestor "$BASE" HEAD 2>/dev/null; then
+            echo "::error::$BASE isn't an ancestor of this commit, so this push rewrote main's history"
+            exit 1
+          fi
+          changed=$(git diff --name-status --diff-filter=MDRT "$BASE" HEAD -- '*.jar' '*.pom' '*.sha1')
+          if [ -n "$changed" ]; then
+            echo "::error::A hosted version never changes, but this changes hosted files"
+            echo "$changed"
+            exit 1
+          fi
+
+  published:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify what Pages serves
+        run: python3 import-artifact.py --verify https://maven.healdan.com/
