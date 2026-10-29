@@ -32,7 +32,8 @@ artifact's POM instead.
 The script refuses group `com.logicaldoc`. Those are Healdan's own modules, which Healdan builds: a build that can't
 find one has a Healdan module left behind on an old version, which needs bumping to the root POM's version.
 
-Push, and once `python3 import-artifact.py --verify https://maven.healdan.com/` passes, Pages has published it.
+Commit on a branch, open a pull request to `main`, and merge it once Check passes. Once
+`python3 import-artifact.py --verify https://maven.healdan.com/` passes, Pages has published it.
 
 ## Checks
 
@@ -41,6 +42,9 @@ The Check workflow runs on every push to `main` and every pull request. It runs 
 hosted, or a push rewrites `main`'s history. Each day, and when run by hand, it also runs
 `--verify https://maven.healdan.com/`, which fetches every hosted file from Pages. GitHub stops a public
 repository's scheduled runs after 60 days without a commit; the Actions tab turns them back on.
+
+A ruleset on `main`, with no bypass, refuses deleting it or force-pushing to it, and takes changes only through a
+pull request whose Check has passed.
 
 ## Artifacts
 
