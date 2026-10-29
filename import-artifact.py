@@ -171,7 +171,10 @@ def scan(local_repo, repository_id):
         for line in record.read_text(encoding="utf-8", errors="replace").splitlines():
             match = RECORD.match(line)
             if match and match["file"].endswith(".jar") and key.fullmatch(match["key"]):
-                found.add(Coordinates.from_jar_path(folder + (match["file"],)))
+                try:
+                    found.add(Coordinates.from_jar_path(folder + (match["file"],)))
+                except ValueError:
+                    continue  # the record's file doesn't fit its folder, so it isn't a jar in Maven's layout
     return sorted(found, key=str)
 
 
@@ -203,7 +206,10 @@ def verify(root, url=None):
             except Problem as problem:
                 problems.append(f"{name}: {problem}")
         if relative.suffix == ".jar":
-            hosted.add(str(Coordinates.from_jar_path(relative.parts)))
+            try:
+                hosted.add(str(Coordinates.from_jar_path(relative.parts)))
+            except ValueError:
+                problems.append(f"{name}: isn't in Maven's layout")
     # Only the artifact table: Not Hosted's rows also start with a coordinate in backticks
     readme = (root / "README.md").read_text(encoding="utf-8")
     table = readme[readme.find(TABLE_START):readme.find(TABLE_END)]

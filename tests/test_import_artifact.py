@@ -250,6 +250,10 @@ class ScanTest(unittest.TestCase):
             self.assertEqual(0, tool.main(["--scan", str(self.local), "--repository-id", "healdan"]))
         self.assertEqual(JPF + "\n", out.getvalue())
 
+    def test_record_whose_jar_is_outside_its_folder_skipped(self):
+        self.record("org/example/odd/1", "other-2.jar>logicaldoc=")
+        self.assertEqual([], tool.scan(self.local, "logicaldoc"))
+
 
 class VerifyTest(unittest.TestCase):
 
@@ -308,6 +312,11 @@ class VerifyTest(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.assertEqual(1, tool.main(["--verify"], root=self.root))
         self.assertIn("doesn't match its .sha1", out.getvalue())
+
+    def test_stray_jar_reported(self):
+        (self.root / "stray.jar").write_bytes(b"stray")
+        (self.root / "stray.jar.sha1").write_text(hashlib.sha1(b"stray").hexdigest() + "\n", encoding="ascii")
+        self.assertEqual(["stray.jar: isn't in Maven's layout"], tool.verify(self.root))
 
 
 if __name__ == "__main__":
