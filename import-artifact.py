@@ -155,6 +155,64 @@ def source_label(base, today):
     return f"{urllib.parse.urlsplit(base).hostname or base}, {today}"
 
 
+# A record line in _remote.repositories: <file>><repository key>=, the key being the id, or (Maven 3.10) the id, a
+# hyphen and a SHA-1 of the repository's URL. An installed file has an empty key.
+RECORD = re.compile(r"^(?P<file>[^#>][^>]*)>(?P<key>[^=]*)=$")
+EXCLUDED = {".git", ".github", "tests"}
+
+
+def scan(local_repo, repository_id):
+    """The jars a local Maven repository records as downloaded from repository_id."""
+    local_repo = pathlib.Path(local_repo)
+    key = re.compile(re.escape(repository_id) + r"(-[0-9a-f]{40})?")
+    found = set()
+    for record in local_repo.rglob("_remote.repositories"):
+        folder = record.parent.relative_to(local_repo).parts
+        for line in record.read_text(encoding="utf-8", errors="replace").splitlines():
+            match = RECORD.match(line)
+            if match and match["file"].endswith(".jar") and key.fullmatch(match["key"]):
+                found.add(Coordinates.from_jar_path(folder + (match["file"],)))
+    return sorted(found, key=str)
+
+
+def hosted_files(root):
+    """Every .jar and .pom in the layout under root, relative to it."""
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root)
+        if relative.parts[0] not in EXCLUDED and path.is_file() and path.suffix in (".jar", ".pom"):
+            yield relative
+
+
+def verify(root, url=None):
+    """Checks every hosted file against its .sha1 and README.md's table and, with url, against what url serves."""
+    problems = []
+    hosted = set()
+    base = None if url is None else (url if url.endswith("/") else url + "/")
+    for relative in hosted_files(root):
+        name = relative.as_posix()
+        data = (root / relative).read_bytes()
+        checksum = root / relative.with_name(relative.name + ".sha1")
+        if not checksum.is_file():
+            problems.append(f"{name}: has no .sha1 beside it")
+        elif published_sha1(checksum.read_text(encoding="ascii", errors="replace")) != sha1(data):
+            problems.append(f"{name}: doesn't match its .sha1")
+        if base is not None:
+            try:
+                if sha1(fetch(urllib.parse.urljoin(base, name))) != sha1(data):
+                    problems.append(f"{name}: {base} serves different content")
+            except Problem as problem:
+                problems.append(f"{name}: {problem}")
+        if relative.suffix == ".jar":
+            hosted.add(str(Coordinates.from_jar_path(relative.parts)))
+    # Only the artifact table: Not Hosted's rows also start with a coordinate in backticks
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    table = readme[readme.find(TABLE_START):readme.find(TABLE_END)]
+    listed = set(re.findall(r"^\| `([^`]+)` \|", table, re.M))
+    problems += [f"{c}: hosted but not in README.md's table" for c in sorted(hosted - listed)]
+    problems += [f"{c}: in README.md's table but not hosted" for c in sorted(listed - hosted)]
+    return problems
+
+
 def main(argv, root=ROOT, today=None):
     parser = argparse.ArgumentParser(prog="import-artifact.py",
                                      description="Imports, scans and verifies Healdan's hosted Maven artifacts.")
@@ -164,7 +222,21 @@ def main(argv, root=ROOT, today=None):
     parser.add_argument("--from", dest="base", default=SOURCEFORGE, help="the repository to fetch from")
     parser.add_argument("--file", type=pathlib.Path, help="import this jar instead of fetching one")
     parser.add_argument("--source", help="with --file: where the jar came from")
+    parser.add_argument("--scan", type=pathlib.Path, metavar="LOCAL_REPO",
+                        help="list the artifacts LOCAL_REPO records as downloaded from --repository-id")
+    parser.add_argument("--repository-id", default="logicaldoc", help="with --scan (default: logicaldoc)")
+    parser.add_argument("--verify", nargs="?", const="", metavar="URL",
+                        help="check the hosted files, and with URL what URL serves")
     args = parser.parse_args(argv)
+    if args.scan:
+        for coordinates in scan(args.scan, args.repository_id):
+            print(coordinates)
+        return 0
+    if args.verify is not None:
+        problems = verify(root, args.verify or None)
+        for problem in problems:
+            print(problem)
+        return 1 if problems else 0
     if not (args.coordinates and args.project and args.licence):
         parser.error("importing needs coordinates, --project and --licence")
     if args.file and not args.source:

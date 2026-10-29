@@ -215,5 +215,100 @@ class WriteArtifactTest(unittest.TestCase):
                          (self.root / self.jpf.directory / "jpf-1.5.1.pom.sha1").read_text(encoding="ascii"))
 
 
+HASH = "3c626cebd032ea6349f2426cabc3dcb9ad2aee3f"
+
+
+class ScanTest(unittest.TestCase):
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.local = pathlib.Path(tmp.name)
+
+    def record(self, folder, *lines):
+        path = self.local / folder / "_remote.repositories"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("#NOTE: This is a Maven Resolver internal implementation file\n" + "\n".join(lines) + "\n",
+                        encoding="utf-8")
+
+    def test_lists_jars_from_the_repository_in_both_record_formats(self):
+        # Maven 3.10 keys a record by id and a hash of the URL; Maven 3.9 by id alone
+        self.record("net/sf/jpf/jpf/1.5.1", f"jpf-1.5.1.jar>logicaldoc-{HASH}=", f"jpf-1.5.1.pom>logicaldoc-{HASH}=")
+        self.record("com/google/code/ksoap2-android/ksoap2-android-assembly/3.3.0",
+                    "ksoap2-android-assembly-3.3.0-jar-with-dependencies.jar>logicaldoc=",
+                    "ksoap2-android-assembly-3.3.0.pom>logicaldoc=")
+        self.record("org/example/central-only/1", f"central-only-1.jar>central-{HASH}=")
+        self.record("org/example/snapshots/1", "snapshots-1.jar>logicaldoc-snapshots=")
+        self.record("org/example/installed/1", "installed-1.jar>=")
+        self.assertEqual([KSOAP, JPF], [str(c) for c in tool.scan(self.local, "logicaldoc")])
+        self.assertEqual(["org.example:central-only:1"], [str(c) for c in tool.scan(self.local, "central")])
+
+    def test_cli_prints_one_per_line(self):
+        self.record("net/sf/jpf/jpf/1.5.1", f"jpf-1.5.1.jar>healdan-{HASH}=")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(0, tool.main(["--scan", str(self.local), "--repository-id", "healdan"]))
+        self.assertEqual(JPF + "\n", out.getvalue())
+
+
+class VerifyTest(unittest.TestCase):
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.base = pathlib.Path(tmp.name)
+        self.root = self.base / "hosted"
+        (self.root / "tests").mkdir(parents=True)
+        (self.root / "tests" / "fixture.jar").write_bytes(b"not hosted")  # tests/ isn't part of the layout
+        (self.root / "README.md").write_text(README, encoding="utf-8")
+        jar = self.base / "jpf.jar"
+        jar.write_bytes(b"jar bytes")
+        with contextlib.redirect_stdout(io.StringIO()):
+            status = tool.main([JPF, "--file", str(jar), "--source", "a bundle", "--project", "JPF",
+                                "--licence", "LGPL-2.1-only"], root=self.root, today="2026-10-29")
+        self.assertEqual(0, status)
+        self.jpf = tool.Coordinates.parse(JPF)
+
+    def test_clean_repository_passes(self):
+        self.assertEqual([], tool.verify(self.root))
+
+    def test_changed_file_reported(self):
+        (self.root / self.jpf.jar).write_bytes(b"changed")
+        self.assertEqual([f"{self.jpf.jar}: doesn't match its .sha1"], tool.verify(self.root))
+
+    def test_missing_checksum_reported(self):
+        (self.root / self.jpf.directory / "jpf-1.5.1.pom.sha1").unlink()
+        self.assertEqual([f"{self.jpf.pom}: has no .sha1 beside it"], tool.verify(self.root))
+
+    def test_unlisted_and_unhosted_reported(self):
+        readme = (self.root / "README.md").read_text(encoding="utf-8")
+        (self.root / "README.md").write_text(readme.replace(f"`{JPF}`", "`betelio:betelio:1.0`"), encoding="utf-8")
+        self.assertEqual([f"{JPF}: hosted but not in README.md's table",
+                          "betelio:betelio:1.0: in README.md's table but not hosted"], tool.verify(self.root))
+
+    def test_published_copy_compared(self):
+        self.assertEqual([], tool.verify(self.root, self.root.as_uri() + "/"))
+        served = self.base / "served"
+        (served / self.jpf.directory).mkdir(parents=True)
+        (served / self.jpf.jar).write_bytes(b"stale")
+        (served / self.jpf.pom).write_bytes((self.root / self.jpf.pom).read_bytes())
+        self.assertEqual([f"{self.jpf.jar}: {served.as_uri()}/ serves different content"],
+                         tool.verify(self.root, served.as_uri() + "/"))
+
+    def test_unpublished_copy_reported(self):
+        problems = tool.verify(self.root, (self.base / "empty").as_uri() + "/")
+        self.assertEqual(2, len(problems))
+        self.assertTrue(problems[0].startswith(f"{self.jpf.jar}: "), problems[0])
+
+    def test_cli_exit_codes(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(0, tool.main(["--verify"], root=self.root))
+        (self.root / self.jpf.jar).write_bytes(b"changed")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(1, tool.main(["--verify"], root=self.root))
+        self.assertIn("doesn't match its .sha1", out.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

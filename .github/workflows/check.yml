@@ -1,0 +1,23 @@
+name: Check
+
+# Every hosted file matches its .sha1 and README.md's table, and import-artifact.py's tests pass.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test import-artifact.py
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Verify the hosted files
+        run: python3 import-artifact.py --verify
