@@ -1,15 +1,14 @@
 # Healdan's Maven Repository
 
-Copies of the Maven artifacts [Healdan](https://github.com/Healdan-Project/healdan)'s build needs that only
-LogicalDOC's Maven repository (`https://logicaldoc.sourceforge.net/maven/`) has. GitHub Pages serves them at
-https://maven.healdan.com/, and Healdan's `docker/maven-settings.xml` mirrors LogicalDOC's repository (id
-`logicaldoc`) to it, so Healdan's builds never contact LogicalDOC. The design is Healdan's
-[`docs/superpowers/specs/2026-10-29-healdan-maven-repository-design.md`](https://github.com/Healdan-Project/healdan/blob/master/docs/superpowers/specs/2026-10-29-healdan-maven-repository-design.md).
+Copies of Maven artifacts [Healdan](https://github.com/Healdan-Project/healdan) needs from repositories other
+than Maven Central. GitHub Pages serves them at https://maven.healdan.com/. The original mirror takes the place
+of LogicalDOC's Maven repository (id `logicaldoc`). See
+[Healdan's Maven repository design](https://github.com/Healdan-Project/healdan/blob/master/docs/superpowers/specs/2026-10-29-healdan-maven-repository-design.md).
 
-Each artifact keeps its own licence, listed below. Of the 15 artifacts, Healdan's image already ships 8 as jars:
+Each artifact keeps its own licence, listed below. Of the 15 LogicalDOC artifacts, Healdan's image ships 8 as jars:
 Smart GWT, jgravatar, Commons FileUpload, JPF and jpf-boot, and the three Jackrabbit jars. The other 7, the GUI's GWT
 libraries (smartgwt-skins, gwt-dnd, gwt-incubator, gwt-links, tagcloud, gwtchismes and gwtexporter), reach it only
-as the GWT compile's JavaScript and resources.
+as the GWT compile's JavaScript and resources. The seven OpenCMIS jars are Alfresco's Jakarta build.
 
 ## Importing an Artifact
 
@@ -24,7 +23,8 @@ python3 import-artifact.py <group>:<artifact>:<version>[:<classifier>] --project
 ```
 
 That fetches the jar and POM from LogicalDOC's repository, checks each against the `.sha1` published beside it,
-writes them with their `.sha1`s, and adds the artifact's row below. If LogicalDOC's repository refuses or has gone,
+writes them with their `.sha1`s, and adds the artifact's row below. For an artifact from another repository, add
+`--from <repository URL>`. If LogicalDOC's repository refuses or has gone,
 import a jar taken from a LogicalDOC CE release bundle instead, with `--file <jar> --source '<where it came from>'`.
 It gets a stub POM. A classifier jar for an artifact that's already hosted, such as a `-sources.jar`, keeps the
 artifact's POM instead.
@@ -64,6 +64,13 @@ pull request whose Check has passed.
 | `net.sf.jpf:jpf-boot:1.5.1:sources` | [Java Plug-in Framework](https://jpf.sourceforge.net/), its source | LGPL-2.1-or-later, bundling SplashWindow (public domain) | `source-boot/` and build files of JPF's `jpf-src-1.5.1.zip` (sourceforge.net/projects/jpf), 2026-10-29 |
 | `net.sf.jpf:jpf:1.5.1` | [Java Plug-in Framework](https://jpf.sourceforge.net/) | LGPL-2.1-or-later | logicaldoc.sourceforge.net, 2026-10-29 |
 | `net.sf.jpf:jpf:1.5.1:sources` | [Java Plug-in Framework](https://jpf.sourceforge.net/), its source | LGPL-2.1-or-later | `source/` and build files of JPF's `jpf-src-1.5.1.zip` (sourceforge.net/projects/jpf), 2026-10-29 |
+| `org.apache.chemistry.opencmis:chemistry-opencmis-client-api:1.0.0-jakarta-4` | [Apache Chemistry OpenCMIS](https://chemistry.apache.org/java/opencmis.html), Alfresco Jakarta build | Apache-2.0 | maven.alfresco.com, 2026-11-24 |
+| `org.apache.chemistry.opencmis:chemistry-opencmis-client-bindings:1.0.0-jakarta-4` | [Apache Chemistry OpenCMIS](https://chemistry.apache.org/java/opencmis.html), Alfresco Jakarta build | Apache-2.0 | maven.alfresco.com, 2026-11-24 |
+| `org.apache.chemistry.opencmis:chemistry-opencmis-client-impl:1.0.0-jakarta-4` | [Apache Chemistry OpenCMIS](https://chemistry.apache.org/java/opencmis.html), Alfresco Jakarta build | Apache-2.0 | maven.alfresco.com, 2026-11-24 |
+| `org.apache.chemistry.opencmis:chemistry-opencmis-commons-api:1.0.0-jakarta-4` | [Apache Chemistry OpenCMIS](https://chemistry.apache.org/java/opencmis.html), Alfresco Jakarta build | Apache-2.0 | maven.alfresco.com, 2026-11-24 |
+| `org.apache.chemistry.opencmis:chemistry-opencmis-commons-impl:1.0.0-jakarta-4` | [Apache Chemistry OpenCMIS](https://chemistry.apache.org/java/opencmis.html), Alfresco Jakarta build | Apache-2.0 | maven.alfresco.com, 2026-11-24 |
+| `org.apache.chemistry.opencmis:chemistry-opencmis-server-bindings:1.0.0-jakarta-4` | [Apache Chemistry OpenCMIS](https://chemistry.apache.org/java/opencmis.html), Alfresco Jakarta build | Apache-2.0 | maven.alfresco.com, 2026-11-24 |
+| `org.apache.chemistry.opencmis:chemistry-opencmis-server-support:1.0.0-jakarta-4` | [Apache Chemistry OpenCMIS](https://chemistry.apache.org/java/opencmis.html), Alfresco Jakarta build | Apache-2.0 | maven.alfresco.com, 2026-11-24 |
 | `org.apache.jackrabbit:jackrabbit-jcr-commons:2.22.0-jakarta` | [Apache Jackrabbit](https://jackrabbit.apache.org/), LogicalDOC's Jakarta build | Apache-2.0 | logicaldoc.sourceforge.net, 2026-10-29 |
 | `org.apache.jackrabbit:jackrabbit-jcr-server:2.22.0-jakarta` | [Apache Jackrabbit](https://jackrabbit.apache.org/), LogicalDOC's Jakarta build | Apache-2.0 | logicaldoc.sourceforge.net, 2026-10-29 |
 | `org.apache.jackrabbit:jackrabbit-webdav:2.22.0-jakarta` | [Apache Jackrabbit](https://jackrabbit.apache.org/), LogicalDOC's Jakarta build | Apache-2.0 | logicaldoc.sourceforge.net, 2026-10-29 |
@@ -81,6 +88,8 @@ Maven Central, because LogicalDOC's build of it has none.
 
 - `commons-fileupload:commons-fileupload:1.6.0-jakarta` and the three `org.apache.jackrabbit` `2.22.0-jakarta` jars
   are LogicalDOC's modified builds of Apache's, rebuilt for Jakarta Servlet. FileUpload's portlet package is gone.
+- The seven `org.apache.chemistry.opencmis` `1.0.0-jakarta-4` jars are Alfresco's Jakarta builds of
+  Apache Chemistry OpenCMIS. Each retains its Apache-2.0 licence and Apache notice in `META-INF`.
 - JPF's jars contain no source, so each has a `-sources.jar` beside it. JPF's own 1.5.1 release
   ([SourceForge](https://sourceforge.net/projects/jpf/files/jpf-1.5/jpf-1.5.1/)) has the same two jars, byte for
   byte, in `jpf-bin-1.5.1.zip`. Each `-sources.jar` holds the matching tree of its `jpf-src-1.5.1.zip` (SHA-1
